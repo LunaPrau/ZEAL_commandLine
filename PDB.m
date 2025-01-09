@@ -99,7 +99,6 @@ classdef PDB < handle
             addRequired(p, 'pdbID_or_FileName', @(x)validateattributes(x,{'char'}, {'nonempty'}, 'pdbID_or_FileName'));
             
             % Set optional
-            addOptional(p, 'fileSource', default_fileSource);
             addOptional(p, 'includeHetatoms', default_includeHetatoms);
             addOptional(p, 'includeHatoms', default_includeHatoms);
             addOptional(p, 'chainID', default_chainID, @(x)validateattributes(x,{'char'}, {'nonempty'}, 'chainID'));
@@ -111,7 +110,6 @@ classdef PDB < handle
             
             % Setup properties
             obj.Name = p.Results.pdbID_or_FileName;
-            obj.FileSource = p.Results.fileSource;
             
             obj.Selection.includeHetatoms = p.Results.includeHetatoms;
             obj.Selection.includeHatoms = p.Results.includeHatoms;
@@ -141,11 +139,7 @@ classdef PDB < handle
                     case {'.pdb', '.ent'}
                         obj.AllData = PDB.readPDBfile(fullfile(obj.Source.Path, [obj.Source.Name obj.Source.Ext] ));
                     case '.cif'
-                        if strcmp(obj.FileSource, 'pymol')
-                            obj.AllData = PDB.readCIFfromPYMOLdata(fullfile(obj.Source.Path, [obj.Source.Name obj.Source.Ext] ));
-                        else
-                            obj.AllData = PDB.readCIFdata(fullfile(obj.Source.Path, [obj.Source.Name obj.Source.Ext] ));
-                        end
+                        obj.AllData = PDB.readCIFdata(fullfile(obj.Source.Path, [obj.Source.Name obj.Source.Ext] ));
                     otherwise
                         try
                             obj.AllData = PDB.readPDBfile(fullfile(obj.Source.Path, [obj.Source.Name obj.Source.Ext] ));
@@ -253,91 +247,6 @@ classdef PDB < handle
     
     methods (Static)
         
-        function PDBdata = readCIFfromPYMOLdata(cifFromPymolSource)
-           
-            % check if file
-            if exist(cifFromPymolSource,'file')               
-                textLines = splitlines( fileread( cifFromPymolSource ) );                
-            else                                
-                textLines = splitlines(cifFromPymolSource);                
-            end
-                    
-            % get _atom_site labels for coordinate data             
-            firstHeader = find(contains(textLines, '_atom_site.group_PDB'));
-            lastHeader = find(contains(textLines, '_atom_site.pdbx_PDB_model_num'));
-         
-            % get ATOM and HETATM records
-            sel = startsWith(textLines, {'ATOM', 'HETATM'});            
-            dataLines = textLines(sel);
-            
-            % Create structure with dynamics fieldnames corresponding to
-            % _atom_site labels the cif file 
-            pdbDataCif = struct;
-            for n=firstHeader:lastHeader
-               
-                headerName = split(textLines{n}, '.');
-                pdbDataCif.(strip(headerName{2})) = cell(1,1);
-                
-            end
-            
-            % pre allocate cell sizes in struct            
-            pdbDataFieldnames = fieldnames(pdbDataCif);
-            nLines = numel(dataLines);            
-            
-            for n = 1:numel(pdbDataFieldnames)
-                    pdbDataCif.(pdbDataFieldnames{n}) = cell(nLines,1);                
-            end
-                        
-            % parse all record lines and assign to struct
-            for n = 1:numel(dataLines)
-                
-                n_line = split(dataLines{n});
-                
-                pdbDataCif.(pdbDataFieldnames{1}){n} =  n_line{1};                
-                pdbDataCif.(pdbDataFieldnames{2}){n} =  n_line{2};                
-                pdbDataCif.(pdbDataFieldnames{3}){n} =  n_line{3};                
-                pdbDataCif.(pdbDataFieldnames{4}){n} =  n_line{4};                
-                pdbDataCif.(pdbDataFieldnames{5}){n} =  n_line{5};                
-                pdbDataCif.(pdbDataFieldnames{6}){n} =  n_line{6};                
-                pdbDataCif.(pdbDataFieldnames{7}){n} =  n_line{7};                
-                pdbDataCif.(pdbDataFieldnames{8}){n} =  n_line{8};                
-                pdbDataCif.(pdbDataFieldnames{9}){n} =  n_line{9};                
-                pdbDataCif.(pdbDataFieldnames{10}){n} =  n_line{10};                
-                pdbDataCif.(pdbDataFieldnames{11}){n} =  n_line{11};
-                pdbDataCif.(pdbDataFieldnames{12}){n} =  n_line{12};
-                pdbDataCif.(pdbDataFieldnames{13}){n} =  n_line{13};
-                pdbDataCif.(pdbDataFieldnames{14}){n} =  n_line{14};
-                pdbDataCif.(pdbDataFieldnames{15}){n} =  n_line{15};
-                pdbDataCif.(pdbDataFieldnames{16}){n} =  n_line{16};
-                pdbDataCif.(pdbDataFieldnames{17}){n} =  n_line{17};
-                pdbDataCif.(pdbDataFieldnames{18}){n} =  n_line{18};
-                
-            end
-            
-            % Create new struct to conform to legacy code
-            PDBdata = struct;
-            PDBdata.recordName = pdbDataCif.('group_PDB');
-            PDBdata.atomNum = cellfun(@str2double, pdbDataCif.('id'));
-            PDBdata.atomName = pdbDataCif.('label_atom_id');
-          
-            PDBdata.altLoc = pdbDataCif.('label_alt_id');
-            PDBdata.resName = pdbDataCif.('label_comp_id');
-           
-            PDBdata.chainID = pdbDataCif.('label_asym_id');
-%            PDBdata.chainID = pdbDataCif.('auth_asym_id');
-            PDBdata.resNum = cellfun(@str2double, pdbDataCif.('label_seq_id'));
-%            PDBdata.resNum = cellfun(@str2double, pdbDataCif.('auth_seq_id'));
-            PDBdata.X = cellfun(@str2double, pdbDataCif.('Cartn_x'));
-            PDBdata.Y = cellfun(@str2double, pdbDataCif.('Cartn_y'));
-            PDBdata.Z = cellfun(@str2double, pdbDataCif.('Cartn_z'));
-            
-            PDBdata.occupancy = cellfun(@str2double, pdbDataCif.('occupancy'));
-            PDBdata.betaFactor = cellfun(@str2double, pdbDataCif.('B_iso_or_equiv'));
-            PDBdata.element = pdbDataCif.('type_symbol');
-            PDBdata.charge =  pdbDataCif.('pdbx_formal_charge');
-            
-        end
-
         function PDBdata = readCIFdata(cifSource)
            
             % check if file
@@ -372,58 +281,59 @@ classdef PDB < handle
             for n = 1:numel(pdbDataFieldnames)
                     pdbDataCif.(pdbDataFieldnames{n}) = cell(nLines,1);                
             end
-                        
-            % parse all record lines and assign to struct
-            for n = 1:numel(dataLines)
-                
-                n_line = split(dataLines{n});
-                
-                pdbDataCif.(pdbDataFieldnames{1}){n} =  n_line{1};                
-                pdbDataCif.(pdbDataFieldnames{2}){n} =  n_line{2};                
-                pdbDataCif.(pdbDataFieldnames{3}){n} =  n_line{3};                
-                pdbDataCif.(pdbDataFieldnames{4}){n} =  n_line{4};                
-                pdbDataCif.(pdbDataFieldnames{5}){n} =  n_line{5};                
-                pdbDataCif.(pdbDataFieldnames{6}){n} =  n_line{6};                
-                pdbDataCif.(pdbDataFieldnames{7}){n} =  n_line{7};                
-                pdbDataCif.(pdbDataFieldnames{8}){n} =  n_line{8};                
-                pdbDataCif.(pdbDataFieldnames{9}){n} =  n_line{9};                
-                pdbDataCif.(pdbDataFieldnames{10}){n} =  n_line{10};                
-                pdbDataCif.(pdbDataFieldnames{11}){n} =  n_line{11};
-                pdbDataCif.(pdbDataFieldnames{12}){n} =  n_line{12};
-                pdbDataCif.(pdbDataFieldnames{13}){n} =  n_line{13};
-                pdbDataCif.(pdbDataFieldnames{14}){n} =  n_line{14};
-                pdbDataCif.(pdbDataFieldnames{15}){n} =  n_line{15};
-                pdbDataCif.(pdbDataFieldnames{16}){n} =  n_line{16};
-                pdbDataCif.(pdbDataFieldnames{17}){n} =  n_line{17};
-                pdbDataCif.(pdbDataFieldnames{18}){n} =  n_line{18};
-                pdbDataCif.(pdbDataFieldnames{19}){n} =  n_line{19};
-                pdbDataCif.(pdbDataFieldnames{20}){n} =  n_line{20};
-                pdbDataCif.(pdbDataFieldnames{21}){n} =  n_line{21};
-                
+
+            % Map headers to indices
+            atomSiteHeaders = textLines(firstHeader:lastHeader);
+            headerMap = containers.Map;
+            for n = 1:numel(atomSiteHeaders)
+                headerName = split(atomSiteHeaders{n}, '.');
+                fieldname = strip(headerName{2});
+                headerMap(fieldname) = n;
             end
-            
-            % Create new struct to conform to legacy code
+
+            % Parse records and populate the structure
+            for n = 1:numel(dataLines)
+                n_line = split(dataLines{n});
+
+                for field = keys(headerMap)
+                    field = field{1}; % Get actual string key
+                    fieldIndex = headerMap(field);
+                    if fieldIndex <= numel(n_line)
+                        pdbDataCif.(field){n} = n_line{fieldIndex};
+                    else
+                        pdbDataCif.(field){n} = ''; % Handle missing fields
+                    end
+                end
+            end
+
+            % Create final struct, using fields if they exist, or fallbacks otherwise
             PDBdata = struct;
-            PDBdata.recordName = pdbDataCif.('group_PDB');
-            PDBdata.atomNum = cellfun(@str2double, pdbDataCif.('id'));
-            PDBdata.atomName = pdbDataCif.('label_atom_id');
-          
-            PDBdata.altLoc = pdbDataCif.('label_alt_id');
-            PDBdata.resName = pdbDataCif.('label_comp_id');
-           
-            %PDBdata.chainID = pdbDataCif.('label_asym_id');
-            PDBdata.chainID = pdbDataCif.('auth_asym_id');
-%             PDBdata.resNum = cellfun(@str2double, pdbDataCif.('label_seq_id'));
-            PDBdata.resNum = cellfun(@str2double, pdbDataCif.('auth_seq_id'));
-            PDBdata.X = cellfun(@str2double, pdbDataCif.('Cartn_x'));
-            PDBdata.Y = cellfun(@str2double, pdbDataCif.('Cartn_y'));
-            PDBdata.Z = cellfun(@str2double, pdbDataCif.('Cartn_z'));
-            
-            PDBdata.occupancy = cellfun(@str2double, pdbDataCif.('occupancy'));
-            PDBdata.betaFactor = cellfun(@str2double, pdbDataCif.('B_iso_or_equiv'));
-            PDBdata.element = pdbDataCif.('type_symbol');
-            PDBdata.charge =  pdbDataCif.('pdbx_formal_charge');
-            
+            PDBdata.recordName = getField(pdbDataCif, 'group_PDB');
+            PDBdata.atomNum = cellfun(@str2double, getField(pdbDataCif, 'id'));
+            PDBdata.atomName = getField(pdbDataCif, 'label_atom_id');
+            PDBdata.altLoc = getField(pdbDataCif, 'label_alt_id');
+            PDBdata.resName = getField(pdbDataCif, 'label_comp_id');
+            PDBdata.chainID = getField(pdbDataCif, 'auth_asym_id', 'label_asym_id');
+            PDBdata.resNum = cellfun(@str2double, getField(pdbDataCif, 'label_seq_id', 'auth_seq_id'));
+            PDBdata.X = cellfun(@str2double, getField(pdbDataCif, 'Cartn_x'));
+            PDBdata.Y = cellfun(@str2double, getField(pdbDataCif, 'Cartn_y'));
+            PDBdata.Z = cellfun(@str2double, getField(pdbDataCif, 'Cartn_z'));
+            PDBdata.occupancy = cellfun(@str2double, getField(pdbDataCif, 'occupancy'));
+            PDBdata.betaFactor = cellfun(@str2double, getField(pdbDataCif, 'B_iso_or_equiv'));
+            PDBdata.element = getField(pdbDataCif, 'type_symbol');
+            PDBdata.charge = getField(pdbDataCif, 'pdbx_formal_charge');
+        
+
+            function value = getField(structure, primaryField, secondaryField)
+                % Attempt to get the primary field, fallback to secondaryField if it doesnt exist
+                if isfield(structure, primaryField)
+                    value = structure.(primaryField);
+                elseif nargin > 2 && isfield(structure, secondaryField)
+                    value = structure.(secondaryField);
+                else
+                    value = {};
+                end
+            end
         end
         
         function PDBdata = parsePDBstruct(pdbStruct, varargin)

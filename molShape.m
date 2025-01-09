@@ -538,7 +538,7 @@ classdef molShape < handle
                     end
                     
                 catch
-                    warning('Could not parse atom name.');
+                    warning('Could not parse atom name: %s index %i', element_i, i);
                 end
             end
             
