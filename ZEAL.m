@@ -194,12 +194,14 @@ classdef ZEAL < handle
             default_searchSaveFactor = 1.01;
             
             default_rot = ''; % = no rotating structure ->  zeal computes shape descriptors for fixed only
+            default_fileSource = ''; % = clean source like from PDB; 21 columns
             
             
             % Setup input parser
             p = inputParser;
             
             addRequired(p, 'fix');
+            addOptional(p, 'fileSource', default_fileSource)
             addOptional(p, 'rot', default_rot);
             
             addOptional(p, 'Order', default_Order, @(x)validateattributes(x,{'numeric'}, {'nonempty','integer', 'positive'}, 'Order'));
@@ -291,6 +293,7 @@ classdef ZEAL < handle
             
             % Fix
             obj.fixed.Name = p.Results.fix;
+            obj.fixed.FileSource = p.Results.fileSource;
             obj.fixed.Selection.includeHetatoms = p.Results.fix_includeHetatoms;
             obj.fixed.Selection.includeHatoms = p.Results.fix_includeHatoms;
             obj.fixed.Selection.chainID = p.Results.fix_chainID;
@@ -317,7 +320,7 @@ classdef ZEAL < handle
                     fprintf('\n - Importing fixed structure: %s', obj.fixed.Name);
                 end
                 
-                obj.fixed.PDB = PDB(obj.fixed.Name, obj.fixed.Selection);
+                obj.fixed.PDB = PDB(obj.fixed.Name, 'fileSource', obj.fixed.FileSource, obj.fixed.Selection);
                 
                 obj.fixed.Rg = computeRadiusOfGyration(obj, obj.fixed.PDB.Data);
                 
@@ -459,7 +462,7 @@ classdef ZEAL < handle
                         [obj.rotating.ZC.ShapeFunction, ~] = molShape.SAsurface(atomList, obj.Settings.molShape.GridRes, probeRadius, obj.Settings.molShape.ShellThickness);
                         
                     otherwise % electron density
-                        [obj.rotating.ZC.ShapeFunction, ~, ~] = molShape.electronDensity(atomLista, obj.Settings.molShape.GridRes, obj.Settings.molShape.SmearFactor);
+                        [obj.rotating.ZC.ShapeFunction, ~, ~] = molShape.electronDensity(atomList, obj.Settings.molShape.GridRes, obj.Settings.molShape.SmearFactor);
                         
                 end
                 
@@ -482,7 +485,7 @@ classdef ZEAL < handle
                         [obj.fixed.ZC.ShapeFunction, ~] = molShape.SAsurface(atomList, obj.Settings.molShape.GridRes, probeRadius, obj.Settings.molShape.ShellThickness);
                         
                     otherwise % electron density
-                        [obj.fixed.ZC.ShapeFunction, ~, ~] = molShape.electronDensity(atomLista, obj.Settings.molShape.GridRes, obj.Settings.molShape.SmearFactor);
+                        [obj.fixed.ZC.ShapeFunction, ~, ~] = molShape.electronDensity(atomList, obj.Settings.molShape.GridRes, obj.Settings.molShape.SmearFactor);
                         
                 end
                 
