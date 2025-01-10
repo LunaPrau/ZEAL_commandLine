@@ -108,12 +108,14 @@ classdef ZEAL < handle
             % 'fix_chainID'         :   string      ('A')
             % 'fix_altLocID'        :   string      ('A')
             % 'fix_residueNumbers'  :   vector      ([] = all residues)
+            % 'fix_negativeFunction':  true/false  (false)
             %
             % 'rot_includeHetatoms' :  true/false  (false)
             % 'rot_includeHatoms'   :  true/false  (false)
             % 'rot_chainID'         :  string      ('A')
             % 'rot_altLocID'        :  string       'A'
             % 'rot_residueNumbers'  :   vector      ([] = all residues)
+            % 'rot_negativeFunction':  true/false  (false)
             %
             % 'PCAalign'            : true/false    (false)
             %       If true, atom coordinates are aligned along their principal axes in the molShape class: coordinates are first rotated so that
@@ -184,6 +186,7 @@ classdef ZEAL < handle
             default_includeHatoms = false;
             default_chainID = 'all';
             default_altLocID = 'A';
+            default_negativeFunction = false;
             
             expected_ShowLog = {'basic', 'standard', 'detailed', 'none'};
             default_LogOption = 'standard';
@@ -215,12 +218,14 @@ classdef ZEAL < handle
             addOptional(p, 'fix_chainID', default_chainID);
             addOptional(p, 'fix_altLocID', default_altLocID);
             addOptional(p, 'fix_residueNumbers', []);
+            addOptional(p, 'fix_negativeFunction', default_negativeFunction, @(x)validateattributes(x,{'numeric', 'logical'}, {'nonempty'}, 'fix_negativeFunction'));
             
             addOptional(p, 'rot_includeHetatoms', default_includeHetatoms, @(x)validateattributes(x,{'numeric', 'logical'}, {'nonempty'}, 'rot_includeHetatoms'));
             addOptional(p, 'rot_includeHatoms', default_includeHatoms, @(x)validateattributes(x,{'numeric', 'logical'}, {'nonempty'}, 'rot_includeHatoms'));
             addOptional(p, 'rot_chainID', default_chainID);
             addOptional(p, 'rot_altLocID', default_altLocID);
             addOptional(p, 'rot_residueNumbers', []);
+            addOptional(p, 'rot_negativeFunction', default_negativeFunction, @(x)validateattributes(x,{'numeric', 'logical'}, {'nonempty'}, 'rot_negativeFunction'));
             
             addOptional(p, 'ChiCoeffPath', default_ChiCoeffPath);
             
@@ -295,6 +300,7 @@ classdef ZEAL < handle
             obj.fixed.Selection.chainID = p.Results.fix_chainID;
             obj.fixed.Selection.altLocID = p.Results.fix_altLocID;
             obj.fixed.Selection.residueNumbers = p.Results.fix_residueNumbers;
+            obj.fixed.NegativeShapeFunction = p.Results.fix_negativeFunction;
             
             if ~obj.InputParserOnly
                 
@@ -328,6 +334,7 @@ classdef ZEAL < handle
                     obj.rotating.Selection.chainID = p.Results.rot_chainID;
                     obj.rotating.Selection.altLocID = p.Results.rot_altLocID;
                     obj.rotating.Selection.residueNumbers = p.Results.rot_residueNumbers;
+                    obj.rotating.NegativeShapeFunction = p.Results.rot_negativeFunction;
                     
                     if obj.Logging.Level > 0
                         fprintf('\n - Importing rotating structure: %s', obj.rotating.Name);
@@ -344,7 +351,7 @@ classdef ZEAL < handle
                     fprintf('\n - Computing shape function for fixed structure');
                 end
                 
-                obj.fixed.molShape = molShape(obj.fixed.PDB.Data, obj.Settings.molShape);
+                obj.fixed.molShape = molShape(obj.fixed.PDB.Data, obj.Settings.molShape);          
                 
                 if obj.AlignMode
                     if obj.Logging.Level > 0
@@ -367,6 +374,9 @@ classdef ZEAL < handle
                 end
                 
                 obj.fixed.ZC = ZC(obj.fixed.molShape.FunctionData, obj.Settings.Order, obj.ChiCoeffs, 'ShowLog', obj.Settings.molShape.ShowLog);
+                if obj.fixed.NegativeShapeFunction
+                    computeNegativeShapeFunction(obj, obj.fixed.ZC);
+                end
                 computeDescriptors(obj.fixed.ZC);
                 
                 if obj.AlignMode
@@ -375,7 +385,6 @@ classdef ZEAL < handle
                     end
                     
                     obj.rotating.ZC = ZC(obj.rotating.molShape.FunctionData, obj.Settings.Order, obj.ChiCoeffs, 'ShowLog', obj.Settings.molShape.ShowLog);
-                    
                     computeDescriptors(obj.rotating.ZC);
                     
                     % Compute the Euclidean distance between shape descriptors
@@ -445,8 +454,12 @@ classdef ZEAL < handle
                 % updateShapeFunction Computes new shape function from
                 % transformed atom coordinates (atomList)
                 
+                persistent isNegative;
+                if isempty(isNegative)
+                    isNegative = false;
+                end
+
                 switch obj.rotating.molShape.FunctionType
-                    
                     case 'MS' % molecular surface
                         [obj.rotating.ZC.ShapeFunction, ~] = molShape.MSsurface(atomList, obj.Settings.molShape.GridRes, obj.Settings.molShape.ProbeRadius, obj.Settings.molShape.ShellThickness);
                         
@@ -459,33 +472,27 @@ classdef ZEAL < handle
                         
                     otherwise % electron density
                         [obj.rotating.ZC.ShapeFunction, ~, ~] = molShape.electronDensity(atomList, obj.Settings.molShape.GridRes, obj.Settings.molShape.SmearFactor);
-                        
                 end
-                
-        end
-        
-        function updateShapeFunction_fixed(obj, atomList)
-                % updateShapeFunction Computes new shape function from
-                % transformed atom coordinates (atomList)
-                
-                switch obj.fixed.molShape.FunctionType
-                    
-                    case 'MS' % molecular surface
-                        [obj.fixed.ZC.ShapeFunction, ~] = molShape.MSsurface(atomList, obj.Settings.molShape.GridRes, obj.Settings.molShape.ProbeRadius, obj.Settings.molShape.ShellThickness);
-                        
-                    case 'SAS' % solvent accessible surface
-                        [obj.fixed.ZC.ShapeFunction, ~] = molShape.SAsurface(atomList, obj.Settings.molShape.GridRes, obj.Settings.molShape.ProbeRadius, obj.Settings.molShape.ShellThickness);
-                        
-                    case 'vdw' % van der Waals surface
-                        probeRadius = 0;
-                        [obj.fixed.ZC.ShapeFunction, ~] = molShape.SAsurface(atomList, obj.Settings.molShape.GridRes, probeRadius, obj.Settings.molShape.ShellThickness);
-                        
-                    otherwise % electron density
-                        [obj.fixed.ZC.ShapeFunction, ~, ~] = molShape.electronDensity(atomList, obj.Settings.molShape.GridRes, obj.Settings.molShape.SmearFactor);
-                        
+
+                % Compute the negative shape function if required
+                if obj.rotating.NegativeShapeFunction && ~isNegative
+                    obj.rotating.ZC.ShapeFunction = ones(size(obj.rotating.ZC.ShapeFunction)) - obj.rotating.ZC.ShapeFunction;
+                    isNegative = true;
+                elseif obj.rotating.NegativeShapeFunction && isNegative
+                    isNegative = false;
                 end
-                
         end
+
+
+        function computeNegativeShapeFunction(obj, ZC)
+                
+                % Invert the shape function to get the negative space
+                negativeShapeFunction = ones(size(ZC.ShapeFunction)) - ZC.ShapeFunction;
+                
+                % Assign the negative space shape function to the correct object for Zernike computation
+                ZC.ShapeFunction = negativeShapeFunction;
+        end
+
         
         function  stop = surrOptiOutputFcn(x,optimvalues,state, obj)
             % surrOptiOutputFcn Output function that is called
