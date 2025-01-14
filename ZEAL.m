@@ -476,7 +476,7 @@ classdef ZEAL < handle
 
                 % Compute the negative shape function if required
                 if obj.rotating.NegativeShapeFunction && ~isNegative
-                    obj.rotating.ZC.ShapeFunction = ones(size(obj.rotating.ZC.ShapeFunction)) - obj.rotating.ZC.ShapeFunction;
+                    computeNegativeShapeFunction(obj, obj.rotating.ZC)
                     isNegative = true;
                 elseif obj.rotating.NegativeShapeFunction && isNegative
                     isNegative = false;
@@ -1154,6 +1154,24 @@ classdef ZEAL < handle
             obj.rotating = rotObj.fixed;
             
             computeZCDdistance(obj);
+            
+        end
+
+        function ZCD = getShapeFunction(obj, varargin)
+            
+            if isempty(varargin)
+                structure = 'fixed';
+            else
+                structure = varargin{1};
+            end
+            
+            switch structure
+                
+                case 'fixed'
+                    ZCD = obj.fixed.ZC.ShapeFunction;
+                case 'rotating'
+                    ZCD = obj.rotating.ZC.ShapeFunction;
+            end
             
         end
         
